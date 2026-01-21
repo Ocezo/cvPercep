@@ -23,7 +23,6 @@ struct Example {
 
 void readExamples(int num_train, vector<Example>& examples);
 void initializeWeights(vector<float>& weights, float& bias);
-void shuffleFullIndices(vector<int>& indices);
 void shuffleIndices(vector<int>& even_indices, vector<int>& odd_indices);
 int predict(const vector<int>& pixels, const vector<float>& weights, float bias);
 void trainPerceptron(vector<int>& even_indices, vector<int>& odd_indices,
@@ -37,10 +36,6 @@ int main(int argc, char* argv[])
     // Charger la base d'exemples
     int num_train = 120;
     int num_test  = 20;
-
-    // Mélanger les index
-    vector<int> indices(num_train + num_test);
-    shuffleFullIndices(indices);
 
     vector<Example> examples;
     readExamples(num_train, examples);
@@ -77,14 +72,6 @@ void initializeWeights(vector<float>& weights, float& bias) {
     }
     // bias = static_cast<float>(rand()) / RAND_MAX * 2 - 1;
     bias = static_cast<float>(rand()) / RAND_MAX;
-}
-
-void shuffleFullIndices(vector<int>& indices) {
-    iota(indices.begin(), indices.end(), 0);
-
-    random_device rd;
-    mt19937 gen(rd());
-    shuffle(indices.begin(), indices.end(), gen);
 }
 
 void shuffleIndices(vector<int>& even_indices, vector<int>& odd_indices) {
