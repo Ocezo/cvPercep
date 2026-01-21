@@ -1,0 +1,5 @@
+.vscode/
+build/
+img/binning/
+img/rois/
+*.jpg
