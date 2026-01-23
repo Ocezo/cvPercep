@@ -21,50 +21,50 @@ struct Example {
     int label;          // +1 pour "C", -1 pour "D"
 };
 
-void readExamples(int num_train, vector<Example>& examples);
+void shuffleIndices(vector<int>& indices);
+void fillInIndices(int num_train, const vector<int>& indices,vector<int>& even_indices, vector<int>& odd_indices);
+void readExamples(int num_train, const vector<int>& even_indices, const vector<int>& odd_indices, vector<Example>& examples);
 void initializeWeights(vector<float>& weights, float& bias);
-void shuffleFullIndices(vector<int>& indices);
-void shuffleIndices(vector<int>& even_indices, vector<int>& odd_indices);
+
 int predict(const vector<int>& pixels, const vector<float>& weights, float bias);
 void trainPerceptron(vector<int>& even_indices, vector<int>& odd_indices,
-                     vector<Example>& examples, vector<float>& weights, float& bias, float learningRate, int epochs);
-void readTests(int num_train, int num_test, const vector<float>& weights, float bias);
+                     const vector<Example>& examples, vector<float>& weights, float& bias, float learningRate, int epochs);
+
+void readTests(int num_train, int num_test, const vector<int>& indices, const vector<float>& weights, float bias);
 pair<float, float> findMinMax(const vector<float>& vec);
-void dispWeights(const vector<float>& weights);
+void dispWeights(const vector<float>& weights, int epoch, int non_zero_errors);
 
 int main(int argc, char* argv[])
 {
-    // Charger la base d'exemples
+    // Ratio entraînement / test
     int num_train = 120;
     int num_test  = 20;
 
-    // Mélanger les index
+    // Mélange des index
     vector<int> indices(num_train + num_test);
-    shuffleFullIndices(indices);
+    shuffleIndices(indices);
 
+    // Remplissage des indices pairs et impairs
+    vector<int> even_indices;
+    vector<int> odd_indices;
+    fillInIndices(num_train, indices, even_indices, odd_indices);
+
+    // Charger la base d'exemples
     vector<Example> examples;
-    readExamples(num_train, examples);
+    readExamples(num_train, even_indices, odd_indices, examples);
     
     // Initialiser les poids et le biais
     vector<float> weights(FLAT_SIZE);
     float bias;
     initializeWeights(weights, bias);
-
-    // Mélanger les index
-    vector<int> even_indices(num_train / 2);
-    vector<int> odd_indices(num_train / 2);
-    shuffleIndices(even_indices, odd_indices);
     
     // Entraîner le perceptron
     float learningRate = 0.1f;
     int epochs = 20;
     trainPerceptron(even_indices, odd_indices, examples, weights, bias, learningRate, epochs);
-
-    // Afficher les poids
-    dispWeights(weights);
     
     // Tester la prédiction
-    readTests(num_train, num_test, weights, bias);
+    readTests(num_train, num_test, indices, weights, bias);
     
     return 0;
 }
@@ -79,7 +79,7 @@ void initializeWeights(vector<float>& weights, float& bias) {
     bias = static_cast<float>(rand()) / RAND_MAX;
 }
 
-void shuffleFullIndices(vector<int>& indices) {
+void shuffleIndices(vector<int>& indices) {
     iota(indices.begin(), indices.end(), 0);
 
     random_device rd;
@@ -87,14 +87,24 @@ void shuffleFullIndices(vector<int>& indices) {
     shuffle(indices.begin(), indices.end(), gen);
 }
 
-void shuffleIndices(vector<int>& even_indices, vector<int>& odd_indices) {
-    iota(even_indices.begin(), even_indices.end(), 0);
-    iota(odd_indices.begin(), odd_indices.end(), 0);
+void fillInIndices(int num_train, const vector<int>& indices, vector<int>& even_indices, vector<int>& odd_indices) {
+    for (int value : indices)
+    {
+        if (value % 2 == 0)
+        {
+            if (even_indices.size() < num_train / 2)
+                even_indices.push_back(value);
+        }
+        else
+        {
+            if (odd_indices.size() < num_train / 2)
+                odd_indices.push_back(value);
+        }
 
-    random_device rd;
-    mt19937 gen(rd());
-    shuffle(even_indices.begin(), even_indices.end(), gen);
-    shuffle(odd_indices.begin(), odd_indices.end(), gen);
+        // Stop dès que nous avons assez d'indices
+        if (even_indices.size() == num_train / 2 && odd_indices.size() == num_train / 2)
+            break;
+    }
 }
 
 // Fonction de prédiction : calcule la somme pondérée et retourne +1 ou -1
@@ -108,42 +118,47 @@ int predict(const vector<int>& pixels, const vector<float>& weights, float bias)
 
 // Entraînement du perceptron
 void trainPerceptron(vector<int>& even_indices, vector<int>& odd_indices,
-                     vector<Example>& examples, vector<float>& weights, float& bias, float learningRate, int epochs) {
+                     const vector<Example>& examples, vector<float>& weights, float& bias, float learningRate, int epochs) {
     for (int epoch = 0; epoch < epochs; ++epoch) {
         int non_zero_errors = 0;
+        dispWeights(weights, epoch, non_zero_errors);
+
         for (int i = 0; i < examples.size(); ++i) {
-            int k = i / 2;
-            int m = i % 2; // pair ou impair i.e. C ou D
-            int n;
-            if (m == 0) {
-                n = 2*even_indices[k];
-            }
-            else if (m == 1) {
-                n = 2*odd_indices[k]+1;
-            }
-            // Example example = examples[i];
-            Example example = examples[n];
+            Example example = examples[i];
             int prediction = predict(example.pixels, weights, bias);
             int error = example.label - prediction;
             if (error != 0) { // Mise à jour si erreur
                 non_zero_errors += 1;
-                for (int i = 0; i < FLAT_SIZE; ++i) {
-                    weights[i] += learningRate * error * example.pixels[i];
+                for (int j = 0; j < FLAT_SIZE; ++j) {
+                    weights[j] += learningRate * error * example.pixels[j];
                 }
                 bias += learningRate * error;
+                dispWeights(weights, epoch, non_zero_errors);
             }
         }
-        cout << "Epoch #" << epoch << ", err = " << non_zero_errors << " / " << examples.size() << endl;
+        cout << "Epoch #" << setw(2) << epoch << ", err = " << non_zero_errors << " / " << examples.size() << endl;
     }
 }
 
-void readExamples(int num_train, vector<Example>& examples) {
+void readExamples(int num_train, const vector<int>& even_indices, const vector<int>& odd_indices, vector<Example>& examples) {
+    int l = -1;
     for (size_t k = 0; k < num_train; ++k) {
-        Mat roi = imread("../img/binning/roi_nxn_" + to_string(k) + ".jpg", IMREAD_GRAYSCALE);
+        if (k % 2 == 0) {
+            // it's even so it's a "C"
+            l = even_indices[k/2];
+            // cout << ". Reading C image " << l << "..." << endl;
+        }
+        else {
+            // it's odd so it's a "D"
+            l = odd_indices[(k-1)/2];
+            // cout << ". Reading D image " << l << "..." << endl;
+        }
+
+        Mat roi = imread("../img/binning/roi_nxn_" + to_string(l) + ".jpg", IMREAD_GRAYSCALE);
         // cout << "ROI_" << k << " = " << roi << endl;
         
         Example example;
-        if (k % 2 == 0) {
+        if (l % 2 == 0) {
             example.label = 1; // "C"
         } else {
             example.label = -1; // "D"
@@ -168,16 +183,17 @@ void readExamples(int num_train, vector<Example>& examples) {
     }
 }
 
-void readTests(int num_train, int num_test, const vector<float>& weights, float bias) {
+void readTests(int num_train, int num_test, const vector<int>& indices, const vector<float>& weights, float bias) {
     int num_OK = 0;
     int num_KO = 0;
 
     for (size_t k = num_train; k < num_train + num_test; ++k) {
-        Mat roi = imread("../img/binning/roi_nxn_" + to_string(k) + ".jpg", IMREAD_GRAYSCALE);
+        int l = indices[k];
+        Mat roi = imread("../img/binning/roi_nxn_" + to_string(l) + ".jpg", IMREAD_GRAYSCALE);
         // cout << "ROI_" << k << " = " << roi << endl;
         
         Example test;
-        if (k % 2 == 0) {
+        if (l % 2 == 0) {
             test.label = 1; // "C"
         } else {
             test.label = -1; // "D"
@@ -198,7 +214,7 @@ void readTests(int num_train, int num_test, const vector<float>& weights, float 
             }
         }
 
-        cout << "Prediction for " << (test.label == 1 ? "C: " : "D: ") <<
+        cout << "Prediction #" << setw(3) << l << " for " << (test.label == 1 ? "C: " : "D: ") <<
                                      (predict(test.pixels, weights, bias) == 1 ? "C" : "D") << 
                             " ~> " << (test.label == predict(test.pixels, weights, bias) ? "OK !" : "KO !") << endl;
         
@@ -222,7 +238,7 @@ pair<float, float> findMinMax(const vector<float>& vec) {
     return { *minIt, *maxIt };
 }
 
-void dispWeights(const vector<float>& weights) {
+void dispWeights(const vector<float>& weights, int epoch, int non_zero_errors) {
     auto [minVal, maxVal] = findMinMax(weights);
     // cout << "Minimum: " << minVal << endl;
     // cout << "Maximum: " << maxVal << endl;
@@ -236,5 +252,5 @@ void dispWeights(const vector<float>& weights) {
         // cout << "[" << i << "," << j << "] ~> " << weight_pixel << endl;
         weights_image.at<uchar>(i, j) = weight_pixel;
     }
-    imwrite("../img/weights.jpg", weights_image);
+    imwrite("../img/weights/weights_" + to_string(epoch + non_zero_errors) + ".jpg", weights_image);
 }
