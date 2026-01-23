@@ -27,7 +27,7 @@ void readExamples(int num_train, const vector<int>& even_indices, const vector<i
 void initializeWeights(vector<float>& weights, float& bias);
 
 int predict(const vector<int>& pixels, const vector<float>& weights, float bias);
-void trainPerceptron(vector<int>& even_indices, vector<int>& odd_indices,
+void trainPerceptron(const vector<int>& even_indices, const vector<int>& odd_indices,
                      const vector<Example>& examples, vector<float>& weights, float& bias, float learningRate, int epochs);
 
 void readTests(int num_train, int num_test, const vector<int>& indices, const vector<float>& weights, float bias);
@@ -117,7 +117,7 @@ int predict(const vector<int>& pixels, const vector<float>& weights, float bias)
 }
 
 // Entraînement du perceptron
-void trainPerceptron(vector<int>& even_indices, vector<int>& odd_indices,
+void trainPerceptron(const vector<int>& even_indices, const vector<int>& odd_indices,
                      const vector<Example>& examples, vector<float>& weights, float& bias, float learningRate, int epochs) {
     for (int epoch = 0; epoch < epochs; ++epoch) {
         int non_zero_errors = 0;
